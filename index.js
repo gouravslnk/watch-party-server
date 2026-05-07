@@ -166,10 +166,10 @@ io.on("connection", (socket) => {
 
   // ─── LEAVE ROOM ──────────────────────────────────────────────────────────
   socket.on("leave-room", async () => {
-    await handleLeave();
+    await handleLeave(true);
   });
 
-  async function handleLeave() {
+  async function handleLeave(isExplicit = false) {
     if (!currentRoom) return;
 
     const room = rooms.get(currentRoom);
@@ -183,22 +183,28 @@ io.on("connection", (socket) => {
     const membersList = getRoomMembers(currentRoom);
     const count = membersList.length;
 
-    if (wasAdmin || count === 0) {
-      // Admin left → delete room from Supabase & memory
+    if (wasAdmin && isExplicit) {
+      // Admin explicitly left → delete room from Supabase & memory
       await supabase.from("rooms").delete().eq("roomCode", currentRoom);
       rooms.delete(currentRoom);
 
       io.to(currentRoom).emit("room-ended", {
         message: "The host ended the party.",
       });
-      console.log(`[ROOM ${currentRoom}] Deleted (host left)`);
+      console.log(`[ROOM ${currentRoom}] Deleted (host explicitly left)`);
     } else {
-      io.to(currentRoom).emit("user-left", {
-        username: currentUsername,
-        members: count,
-        membersList,
-      });
-      console.log(`[ROOM ${currentRoom}] ${currentUsername} left (${count} remaining)`);
+      if (count === 0) {
+        // Clean up memory if empty, but keep in Supabase so host can rejoin
+        rooms.delete(currentRoom);
+        console.log(`[ROOM ${currentRoom}] Removed from memory (empty)`);
+      } else {
+        io.to(currentRoom).emit("user-left", {
+          username: currentUsername,
+          members: count,
+          membersList,
+        });
+        console.log(`[ROOM ${currentRoom}] ${currentUsername} left (${count} remaining)`);
+      }
     }
 
     currentRoom = null;
@@ -208,12 +214,12 @@ io.on("connection", (socket) => {
   // ─── DISCONNECT ───────────────────────────────────────────────────────────
   socket.on("disconnect", async () => {
     console.log(`[-] Client disconnected: ${socket.id}`);
-    await handleLeave();
+    await handleLeave(false);
   });
 });
 
 httpServer.listen(PORT, () => {
-  console.log(`\n🎬 WatchParty Socket Server running on port ${PORT}`);
+  console.log(`\n WatchParty Socket Server running on port ${PORT}`);
   console.log(`   Architecture: Host → Server → Clients (Socket.IO)`);
   console.log(`   Backend: Supabase (room persistence)\n`);
 });
