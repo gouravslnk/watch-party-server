@@ -1,17 +1,3 @@
-/**
- * WatchParty Socket.IO Server
- * Computer Networks Project — Client-Server Architecture
- * 
- * This server acts as the central signaling/sync hub.
- * The HOST (admin) is the source of truth for video state.
- * All CLIENTS receive sync updates from the host via this server.
- * 
- * Architecture:
- *   Host --[player-control]--> Server --[player-update]--> All Clients
- *   Client --[request-video-state]--> Server --[request-video-state]--> Host
- *   Host --[video-state-response]--> Server --[sync-video-state]--> Requesting Client
- */
-
 import { createServer } from "http";
 import { Server } from "socket.io";
 import { createClient } from "@supabase/supabase-js";
@@ -60,7 +46,7 @@ io.on("connection", (socket) => {
   let currentRoom = null;
   let currentUsername = null;
 
-  // ─── JOIN ROOM ────────────────────────────────────────────────────────────
+  // JOIN ROOM
   socket.on("join-room", async ({ roomCode, username }) => {
     if (!roomCode || !username) return;
 
@@ -111,7 +97,7 @@ io.on("connection", (socket) => {
     console.log(`[ROOM ${roomCode}] ${username} joined (${count} total)`);
   });
 
-  // ─── HOST → CLIENTS: Player control ──────────────────────────────────────
+  // HOST → CLIENTS: Player control 
   socket.on("player-control", (data) => {
     if (!currentRoom) return;
 
@@ -128,7 +114,7 @@ io.on("connection", (socket) => {
     });
   });
 
-  // ─── HOST → SERVER → NEW CLIENT: State sync ──────────────────────────────
+  // HOST → SERVER → NEW CLIENT: State sync 
   socket.on("video-state-response", ({ requestingSocketId, currentTime, isPlaying }) => {
     // Host sends current video state; server forwards to the requesting client only
     io.to(requestingSocketId).emit("sync-video-state", {
@@ -137,7 +123,7 @@ io.on("connection", (socket) => {
     });
   });
 
-  // ─── HOST: Change video ───────────────────────────────────────────────────
+  // HOST: Change video
   socket.on("change-video", (data) => {
     if (!currentRoom) return;
     const room = rooms.get(currentRoom);
@@ -148,7 +134,7 @@ io.on("connection", (socket) => {
     console.log(`[ROOM ${currentRoom}] Video changed by host`);
   });
 
-  // ─── CHAT ─────────────────────────────────────────────────────────────────
+  // CHAT
   socket.on("send-message", (message) => {
     if (!currentRoom || !currentUsername || !message) return;
 
@@ -158,13 +144,13 @@ io.on("connection", (socket) => {
     });
   });
 
-  // ─── REACTIONS ────────────────────────────────────────────────────────────
+  // REACTIONS
   socket.on("send-reaction", (emoji) => {
     if (!currentRoom || !currentUsername) return;
     io.to(currentRoom).emit("new-reaction", { username: currentUsername, emoji });
   });
 
-  // ─── LEAVE ROOM ──────────────────────────────────────────────────────────
+  // LEAVE ROOM
   socket.on("leave-room", async () => {
     await handleLeave(true);
   });
@@ -211,7 +197,7 @@ io.on("connection", (socket) => {
     currentUsername = null;
   }
 
-  // ─── DISCONNECT ───────────────────────────────────────────────────────────
+  // DISCONNECT
   socket.on("disconnect", async () => {
     console.log(`[-] Client disconnected: ${socket.id}`);
     await handleLeave(false);
